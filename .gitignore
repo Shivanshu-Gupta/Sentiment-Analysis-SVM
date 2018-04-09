@@ -106,4 +106,4 @@ venv.bak/
 .DS_Store
 
 writeup.txt
-
+sftp-config.json

@@ -1,28 +1,22 @@
-import os
 import argparse
 import json
-import spacy
-import pickle
-import html
 import numpy as np
 
-nlp = spacy.load('en_core_web_sm', disable=['ner', 'parser'])
-
-parser = argparse.ArgumentParser(description='SVM-based Sentiment Analyzer')
+parser = argparse.ArgumentParser(description='Preprocess audio reviews dataset using Spacy')
 parser.add_argument('--input_file', default='', required=True, metavar='PATH')
 parser.add_argument('--output_file', default='', required=True, metavar='PATH')
-parser.add_argument('--pickle_file', default='', metavar='PATH')
 args = parser.parse_args()
 
 
 def load_data(datafile):
+    import html
     samples = [json.loads(line) for line in open(datafile).readlines()]
     data = {}
     data['review'] = [html.unescape(sample['reviewText']) for sample in samples]
     data['summary'] = [html.unescape(sample['summary']) for sample in samples]
     data['rating'] = np.array([sample['overall'] for sample in samples])
 
-    classes = np.array([-1, 0, 1])
+    classes = np.array([0, 1, 2])
 
     def target(rating):
         if rating <= 2:
@@ -36,26 +30,35 @@ def load_data(datafile):
     return data
 
 
-def preprocess(data, outfile, picklefile=None):
-    # if picklefile:
-    #     if not os.path.exists(picklefile):
-    #         docs = list(nlp.pipe(data['review']))
-    #         with open(picklefile, 'wb') as f:
-    #             pickle.dump(docs, f)
-    #     else:
-    #         docs = pickle.load(open(picklefile, 'rb'))
+def dump_dataset(raw_data, outfile):
+    import spacy
     with open(outfile, 'w') as outf:
-        review_docs = nlp.pipe(data['review'])
-        summ_docs = nlp.pipe(data['summary'])
-        for i, (review, summ, target) in enumerate(zip(review_docs, summ_docs, data['target'])):
-            review = '  '.join([tok.text + ':|:' + tok.tag_ for tok in review if not tok.is_stop and tok.text.strip() != ''])
-            summ = '  '.join([tok.text + ':|:' + tok.tag_ for tok in summ if not tok.is_stop and tok.text.strip() != ''])
-            outf.write(review + '\t' + summ + '\t' + str(target) + '\n')
+        nlp = spacy.load('en_core_web_sm')
+        review_docs = nlp.pipe(raw_data['review'])
+        summ_docs = nlp.pipe(raw_data['summary'])
+        for i, (review, summ, target) in enumerate(zip(review_docs, summ_docs, raw_data['target'])):
+            sample = {}
+            # remove stop-words and whitespace tokens
+            review_valid = [tok for tok in review if not tok.is_stop and tok.text.strip() != '']
+            sample['review'] = [[tok.text.lower() for tok in sent] for sent in review_valid]
+            # sample['review_tag'] = [[tok.tag for tok in sent] for sent in review_valid]
+            sample['review_tag_'] = [[tok.tag_.lower() for tok in sent] for sent in review_valid]
+            # sample['review_lemma'] = [[tok.lemma_.lower() for tok in sent] for sent in review_valid]
+
+            # remove stop-words and whitespace tokens
+            summary_valid = [tok for tok in summ if not tok.is_stop and tok.text.strip() != '']
+            sample['summary'] = [tok.text.lower() for tok in summary_valid]
+            # sample['summary_tag'] = [tok.tag for tok in summary_valid]
+            sample['summary_tag_'] = [tok.tag_.lower() for tok in summary_valid]
+            # sample['summary_lemma'] = [tok.lemma_.lower() for tok in summary_valid]
+            sample['target'] = int(target)
+            outf.write(json.dumps(sample) + '\n')
             if i % 1000 == 0:
                 print(i)
 
 
 if __name__ == '__main__':
+    print("Loading raw data from {}".format(args.input_file))
     data = load_data(args.input_file)
-    preprocess(data, args.output_file, args.pickle_file)
-
+    print("Preprocessing data and writing to {}".format(args.output_file))
+    dump_dataset(data, args.output_file)

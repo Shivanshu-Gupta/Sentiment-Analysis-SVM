@@ -1,0 +1,14 @@
+# load mkl:
+module load mkl/intel/psxe2015/mklvars
+
+#Preprocessing:
+# 1. remove non-printable ascii characters using
+tr -cd '\11\12\15\40-\176' < file-with-binary-chars > clean-file
+
+# 2. reduce long sequences of puncutation
+sed -i 's/\([.*!?]\)\1\{3,\}/\1\1\1 /g' <data_file>
+sed -i 's/\([A-Za-z]\)\1\{3,\}/\1\1\1 /g' <data_file>
+
+# 3. convert HTML entities to unicode
+# do in python
+html.unescape()
